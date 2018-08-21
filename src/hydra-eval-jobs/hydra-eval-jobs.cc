@@ -1,6 +1,7 @@
 #include <map>
 #include <iostream>
 
+#define GC_LINUX_THREADS 1
 #include <gc/gc_allocator.h>
 
 #include "shared.hh"
@@ -201,7 +202,7 @@ static void findJobs(EvalState & state, JSONObject & top,
     } catch (EvalError & e) {
         if (comma) { std::cout << ","; comma = false; }
         auto res = top.object(attrPath);
-        res.attr("error", e.msg());
+        res.attr("error", filterANSIEscapes(e.msg(), true));
     }
 }
 
@@ -265,8 +266,13 @@ int main(int argc, char * * argv)
             ProcessOptions options;
             options.allowVfork = false;
 
+            GC_atfork_prepare();
+
             auto pid = startProcess([&]() {
                 pipe.readSide = -1;
+
+                GC_atfork_child();
+                GC_start_mark_threads();
 
                 if (lastAttrPath != "") debug("resuming from '%s'", lastAttrPath);
 
@@ -300,6 +306,8 @@ int main(int argc, char * * argv)
                 exit(0);
             }, options);
 
+            GC_atfork_parent();
+
             pipe.writeSide = -1;
 
             int status;
@@ -311,6 +319,8 @@ int main(int argc, char * * argv)
 
             if (status != 0)
                 throw Exit(WIFEXITED(status) ? WEXITSTATUS(status) : 99);
+
+            maxHeapSize += 64 * 1024 * 1024;
 
             lastAttrPath = drainFD(pipe.readSide.get());
         } while (lastAttrPath != "");
