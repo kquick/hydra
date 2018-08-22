@@ -46,53 +46,9 @@ Notifications have also been sent to [% notificationsTo.size - 1 %] other [% IF 
 [% END %]
 
 Changes:
-[%-
-BLOCK renderShortInputValue;
-  IF input.type == "build" || input.type == "sysbuild" -%] Build [% input.dependency.id %] [%
-  ELSIF input.type == "string" -%] "[% HTML.escape(input.value) %]" [%
-  ELSIF input.type == "nix" || input.type == "boolean" -%] [% input.value %] [%
-  ELSE %] [% input.uri %][% IF input.revision %] (r[% input.revision %])[% END %] [%
-  END;
-END;
-FOREACH bi1 IN prevInputs;
-     deletedInput = 1;
-     FOREACH bi2 IN curInputs;
-       IF bi1.name == bi2.name;
-         IF bi1.type == bi2.type;
-           IF bi1.value != bi2.value || bi1.uri != bi2.uri %]
-    * [% bi1.name %]:[% fill.substr(0, longest - bi1.name.length) %][% INCLUDE renderShortInputValue input=bi1 %]to[% INCLUDE renderShortInputValue input=bi2 %] [%
-           ELSIF bi1.uri == bi2.uri && bi1.revision != bi2.revision;
-             IF bi1.type == "git" %]
-    * [% bi1.name %]:[% fill.substr(0, longest - bi1.name.length) %] [% bi1.revision.substr(0,6) %] to [% bi2.revision.substr(0,6) %] [%
-             ELSE %]
-    * [% bi1.name %]:[% fill.substr(0, longest - bi1.name.length) %] [% bi1.revision %] to [% bi2.revision %] [%
-             END;
-           ELSIF bi1.dependency.id != bi2.dependency.id || bi1.path != bi2.path %]
-    * [% bi1.name %]:[% fill.substr(0, longest - bi1.name.length) %][% INCLUDE renderShortInputValue input=bi1 %]to[% INCLUDE renderShortInputValue input=bi2 %] [%
-           END;
-         ELSE %]
-    * [% bi1.name %]:[% fill.substr(0, longest - bi1.name.length) %] Changed input type from "[% tp=bi1.type; inputTypes.tp %]" to "[% tp=bi2.type; inputTypes.tp %]" [%
-         END;
-         deletedInput = 0;
-         LAST;
-       END;
-     END;
-     IF deletedInput == 1 %]
-    * [% bi1.name %]:[% fill.substr(0, longest - bi1.name.length) %] Input not present in this build. [%
-     END;
-   END %]
-[% FOREACH bi2 IN curInputs;
-     newInput = 1;
-     FOREACH bi1 IN prevInputs;
-       IF bi1.name == bi2.name;
-         newInput = 0;
-         LAST;
-       END;
-     END;
-     IF newInput == 1 -%]
-    * [% bi2.name -%]:[% fill.substr(0, longest - bi2.name.length) %] New input in this build [%
-     END; 
-END %]
+[% FOREACH ichg IN inputChanges.keys.sort -%]
+    * [% ichg %]:[% fill.substr(0, longest - ichg.length) %] [% inputChanges.\$ichg %]
+[% END %]
 
 Go forth and fix [% IF dependents.size == 0 -%]it[% ELSE %]them[% END %].
 [% END -%]
@@ -102,6 +58,27 @@ Regards,
 The Hydra build daemon.
 EOF
 
+
+sub rValue {  # like common.tt renderShortInputValue
+    my ($input) = @_;
+    if ($input->type eq "build" || $input->type eq "sysbuild") {
+        "Build ".$input->dependency->id;
+    } elsif ($input->type eq "string") {
+        '"'.$input->value.'"';
+    } elsif ($input->type eq "nix" || $input->type eq "boolean") {
+        $input->value;
+    } else {
+        if ($input->revision) {
+            $input->uri." (r".$input->revision.")";
+        } else {
+            $input->uri;
+        }
+    }
+}
+sub rDelta {
+    my ($oldval, $newval) = @_;
+    "$oldval to $newval";
+}
 
 sub buildFinished {
     my ($self, $build, $dependents) = @_;
@@ -147,6 +124,59 @@ sub buildFinished {
         $authorList = join(" or ", scalar @x > 1 ? join(", ", @x[0..scalar @x - 2]): (), $x[-1]);
         $addresses{$_} = { builds => [ $build ] } foreach (@{$emailable_authors});
     }
+    my @steps = map {$_->buildstepoutputs} ($build->buildsteps->search(
+                                                {busy => 0, status => { '!=', 0 }},
+                                                {order_by => "stepnr desc"}));
+    my @stepnames = map {$_->path} @steps;
+
+    my $thisEval = getFirstEval($build);
+    my $prevEval = $thisEval->jobset->jobsetevals->search(
+        { hasnewbuilds => 1, id => { '<', $thisEval->id } },
+        { order_by => "id DESC", rows => 1 })->first;
+
+    my %iChng;
+    foreach my $bi1 ($prevEval->jobsetevalinputs) {
+        my $deletedInput = 1;
+        foreach my $bi2 ($thisEval->jobsetevalinputs) {
+            next unless ($bi1->name eq $bi2->name);
+            if ($bi1->type eq $bi2->type) {
+                if ($bi1->value ne $bi2->value || $bi1->uri ne $bi2->uri) {
+                    $iChng{$bi1->name} = rDelta(rValue($bi1), rValue($bi2));
+                } elsif ($bi1->uri eq $bi2->uri && $bi1->revision ne $bi2->revision) {
+                    if ($bi1->type eq "git") {
+                        $iChng{$bi1->name} = rDelta(substr($bi1->revision,0,6),
+                                                    substr($bi2->revision,0,6));
+                    } else {
+                        $iChng{$bi1->name} = rDelta($bi1->revision, $bi2->revision);
+                    }
+                } elsif (($bi1->dependency && $bi2->dependency &&
+                          $bi1->dependency->id != $bi2->dependency->id) ||
+                         $bi1->path ne $bi2->path) {
+                    $iChng{$bi1->name} = rDelta(rValue($bi1), rValue($bi2));
+                }
+            } else {
+                $iChng{$bi1->name} = rDelta(rValue($bi1), rValue($bi2));
+            }
+            $deletedInput = 0;
+            last;
+        }
+        if ($deletedInput == 1) {
+            $iChng{$bi1->name} = "Input not present in this build";
+        }
+    }
+    foreach my $bi2 ($thisEval->jobsetevalinputs) {
+        my $newInput = 1;
+        foreach my $bi1 ($prevEval->jobsetevalinputs) {
+            next if ($bi1->name != $bi2->name);
+            $newInput = 0;
+            last;
+        }
+        if ($newInput) {
+            $iChng{$bi2->name} = "New input in this build";
+        }
+    }
+
+    my $longestInputName = max (map { length $_ } (keys %iChng));
 
     # Send an email to each interested address.
     for my $to (keys %addresses) {
@@ -154,18 +184,6 @@ sub buildFinished {
         my @builds = @{$addresses{$to}->{builds}};
 
         my $tt = Template->new({});
-
-        my @steps = map {$_->buildstepoutputs} ($build->buildsteps->search(
-                                                    {busy => 0, status => { '!=', 0 }},
-                                                    {order_by => "stepnr desc"}));
-        my @stepnames = map {$_->path} @steps;
-
-        my $thisEval = getFirstEval($build);
-        my $prevEval = $thisEval->jobset->jobsetevals->search(
-            { hasnewbuilds => 1, id => { '<', $thisEval->id } },
-            { order_by => "id DESC", rows => 1 })->first;
-
-        my $longestInputName = max (map { length $_->name } $thisEval->jobsetevalinputs);
 
         my $vars =
             { build => $build, prevBuild => getPreviousBuild($build)
@@ -177,8 +195,7 @@ sub buildFinished {
             , authorList => $authorList
             , failSteps => \@stepnames
             , notificationsTo => [(keys %addresses)]
-            , curInputs => [$thisEval->jobsetevalinputs]
-            , prevInputs => [$prevEval->jobsetevalinputs]
+            , inputChanges => \%iChng
             , longest => $longestInputName
             , fill => "                                        "
             };
