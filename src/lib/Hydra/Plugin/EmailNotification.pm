@@ -201,7 +201,14 @@ sub buildFinished {
             };
 
         my $body;
-        $tt->process(\$template, $vars, \$body)
+        my $tmpl;
+        if ($self->{config}->{email_template} && open(my $fh, $self->{config}->{email_template})) {
+            do { local $/ = undef;
+                 $tmpl = <$fh>;
+            }
+        } else { $tmpl = $template; };
+
+        $tt->process(\$tmpl, $vars, \$body)
             or die "failed to generate email from template";
 
         # stripping trailing spaces from lines
