@@ -80,6 +80,49 @@ sub rDelta {
     "$oldval to $newval";
 }
 
+=item buildFinished($self, $build, $dependents)
+
+Generates email notification for $build based on the completion status
+of $build, where $dependents are a list of downstream builds affected
+by this build.
+
+The $self argument is a hash which has the "config" key, whose values
+are the hydra.conf file entries.  Configuration items used by this
+function are:
+
+    * email_notification - must be "true" (e.g. 1, a non-empty string,
+      etc.) to enable email notifications on build completions.  If
+      not set, or set to "false", no emails will be sent.
+
+    * email_template - if specified, this is a file which contains the
+      template used for sending emails.  The template has access to
+      the $var variables below.  If not specified or readable, this
+      uses the $template default defined in this file.
+
+Notifications are sent:
+
+  1. Only if the enableemail attribute is true for the jobset
+
+  2. If the build status is not cancelled or aborted, and is different
+     from the previous build.
+
+  3. To the jobset->emailoverride or job meta.maintainer
+
+  4. Only for git or hg inputs whose source/type didn't change
+
+  5. For the author of each commit to those inputs between the
+     previous build and the current build
+
+  6. If the jobinput->emailresponsible is true
+
+  7. To that commit author
+
+Note that the attribution of committers listed within the notification
+email is not necessarily the same set of persons to whom the email is
+sent: step 3 adds additional recipients and steps 4-6 potentially
+eliminate committers from the set of recipients.
+
+=cut
 sub buildFinished {
     my ($self, $build, $dependents) = @_;
 
