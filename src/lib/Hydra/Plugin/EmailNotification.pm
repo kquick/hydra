@@ -18,10 +18,12 @@ The status of Hydra job ‘[% showJobName(build) %]’ [% IF showSystem %](on [%
 
   [% baseurl %]/build/[% build.id %]
 
+[% IF failSteps.size > 0 -%]
 Failed [% failSteps.size %] steps:
 [% FOREACH s IN failSteps -%]
     * [% s %]
 [% END -%]
+[% END %]
 
 [% IF dependents.size > 0 -%]
 The following dependent jobs also failed:
