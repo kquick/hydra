@@ -40,13 +40,6 @@ This may be due to [% IF nrCommits > 1 -%][% nrCommits %] commits[%- ELSE -%]a c
 [% IF build.buildstatus == 0 -%]
 Yay!
 [% ELSE -%]
-[% IF notificationsTo.size > 1 %]
-Notifications have also been sent to [% notificationsTo.size - 1 %] other [% IF notificationsTo.size != 2 %]people[% ELSE %]person[% END %]:
-[% FOREACH t IN notificationsTo -%]
-    [% t %]
-[% END %]
-[% END %]
-
 Changes:
 [% FOREACH ichg IN inputChanges.keys.sort -%]
     * [% ichg %]:[% fill.substr(0, longest - ichg.length) %] [% inputChanges.\$ichg %]
@@ -54,6 +47,13 @@ Changes:
 
 Go forth and fix [% IF dependents.size == 0 -%]it[% ELSE %]them[% END %].
 [% END -%]
+
+[% IF notificationsTo.size > 1 %]
+Notifications have also been sent to [% notificationsTo.size - 1 %] other [% IF notificationsTo.size != 2 %]people[% ELSE %]person[% END %]:
+[% FOREACH t IN notificationsTo -%]
+    [% t %]
+[% END %]
+[% END %]
 
 Regards,
 
