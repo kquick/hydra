@@ -11,12 +11,22 @@ sub supportedInputTypes {
     $inputTypes->{'path'} = 'Local path or URL';
 }
 
+sub _parseValue {
+    my ($value) = @_;
+    my @parts = split ' ', $value;
+    (my $uri, my $freq) = @parts;
+    # by default don't check a path more often than every 30 seconds,
+    # but the second path argument can change that value.
+    $freq = defined $freq ? $freq : 30;
+    return ($uri, $freq);
+}
+
 sub fetchInput {
     my ($self, $type, $name, $value) = @_;
 
     return undef if $type ne "path";
 
-    my $uri = $value;
+    my ($uri, $freq) = _parseValue($value);
 
     my $timestamp = time;
     my $sha256;
@@ -24,7 +34,7 @@ sub fetchInput {
 
     # Some simple caching: don't check a path more than once every N seconds.
     (my $cachedInput) = $self->{db}->resultset('CachedPathInputs')->search(
-        {srcpath => $uri, lastseen => {">", $timestamp - 30}},
+        {srcpath => $uri, lastseen => {">", $timestamp - $freq}},
         {rows => 1, order_by => "lastseen DESC"});
 
     if (defined $cachedInput && isValidPath($cachedInput->storepath)) {
