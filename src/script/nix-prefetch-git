@@ -143,9 +143,11 @@ init_submodules(){
     # Add urls into .git/config file
     git submodule init
 
-    # list submodule directories and their hashes
-    git submodule update
-    git submodule status
+    # KWQ 20181016: for some reason, this uses proper remote
+    # references that enable the checkout of private repos (via the
+    # special remote name in the ~/.ssh/config), whereas a `git
+    # submodule update` does not.
+    git submodule foreach 'clone "$path" "$(get_submodule_url $name)" "$sha1" ""'
 }
 
 clone(){
