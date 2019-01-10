@@ -124,7 +124,7 @@ rec {
 
       postUnpack = optionalString (!shell) ''
         # Clean up when building from a working tree.
-        (cd $sourceRoot && (git ls-files -o --directory | xargs -r rm -rfv)) || true
+        (cd $sourceRoot && (${git}/bin/git ls-files -o --directory | xargs -r rm -rfv)) || true
       '';
 
       configureFlags = [ "--with-docbook-xsl=${docbook_xsl}/xml/xsl/docbook" ];
