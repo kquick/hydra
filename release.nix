@@ -75,6 +75,7 @@ rec {
             EmailMIME
             EmailSender
             FileSlurp
+            ConfigIniFiles
             IOCompress
             IPCRun
             JSON
