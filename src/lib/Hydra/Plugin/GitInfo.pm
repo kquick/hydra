@@ -94,7 +94,7 @@ sub _pluginConfig {
     my $values = {
         timeout => 600,
     };
-    my $input_block = "$project_name:$jobset_name:$input_name";  # KWQ: :git-info?
+    my $input_block = "$project_name:$jobset_name:$input_name";
 
     unless (defined $cfg) {
         _printIfDebug "Unable to load $CONFIG_SECTION section\n";
@@ -106,7 +106,7 @@ sub _pluginConfig {
     }
     if (defined $cfg->{$input_block} and %{$cfg->{$input_block}}) {
          _printIfDebug "Merging sections from $input_block\n";
-         # merge with precedense to the input block  # KWQ  spelling
+         # merge with precedence to the input block
         $cfg = {%{$cfg}, %{$cfg->{$input_block}}};
     }
     if (exists $cfg->{timeout}) {
@@ -122,7 +122,7 @@ sub _pluginConfig {
 sub fetchInput {
     my ($self, $type, $name, $value, $project, $jobset) = @_;
 
-    return undef if $type ne "git";
+    return undef if $type ne "gitinfo";
 
     my ($uri, $branch, $deepClone, $options) = _parseValue($value);
     # my $cfg = { timeout => 600 };
@@ -147,7 +147,7 @@ sub getGitInfo {
     my ($uri, $branch, $timeout) = @_;
 
     # Clone or update a branch of the repository into our SCM cache.
-    my $cacheDir = getSCMCacheDir . "/git";
+    my $cacheDir = getSCMCacheDir . "/gitinfo";  # avoid colliding with GitInput
     mkpath($cacheDir);
     my $clonePath = $cacheDir . "/" . sha256_hex($uri);
 
