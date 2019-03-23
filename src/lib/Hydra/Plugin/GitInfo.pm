@@ -122,7 +122,7 @@ sub _pluginConfig {
 sub fetchInput {
     my ($self, $type, $name, $value, $project, $jobset) = @_;
 
-    return undef if $type ne "git";
+    return undef if $type ne "gitinfo";
 
     my ($uri, $branch, $deepClone, $options) = _parseValue($value);
     # my $cfg = { timeout => 600 };
@@ -147,7 +147,7 @@ sub getGitInfo {
     my ($uri, $branch, $timeout) = @_;
 
     # Clone or update a branch of the repository into our SCM cache.
-    my $cacheDir = getSCMCacheDir . "/git";
+    my $cacheDir = getSCMCacheDir . "/gitinfo";  # avoid colliding with GitInput
     mkpath($cacheDir);
     my $clonePath = $cacheDir . "/" . sha256_hex($uri);
 
