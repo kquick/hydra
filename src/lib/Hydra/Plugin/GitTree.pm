@@ -1,4 +1,4 @@
-package Hydra::Plugin::GitInfo;
+package Hydra::Plugin::GitTree;
 
 use strict;
 use parent 'Hydra::Plugin';
@@ -12,10 +12,10 @@ use Env;
 use Data::Dumper;
 use Config::IniFiles;
 
-my $CONFIG_SECTION = "git-info";
+my $CONFIG_SECTION = "git-tree";
 
 ##
-## The GitInfo plugin doesn't fetch the repo itself (permanently) but
+## The GitTree plugin doesn't fetch the repo itself (permanently) but
 ## it determines the current revision, the checksum, and the revisions
 ## and checksums of all the .gitmodules submodules.  This information
 ## should be useable by an evaluation to generate a declarative input
@@ -23,7 +23,7 @@ my $CONFIG_SECTION = "git-info";
 
 sub supportedInputTypes {
     my ($self, $inputTypes) = @_;
-    $inputTypes->{'gitinfo'} = 'Git repo information';
+    $inputTypes->{'gittree'} = 'Git repo tree information';
 }
 
 sub _isHash {
@@ -53,7 +53,7 @@ sub _parseValue {
 
 sub _printIfDebug {
     my ($msg) = @_;
-    print STDERR "GitInfo: $msg" if $ENV{'HYDRA_DEBUG'};
+    print STDERR "GitTree: $msg" if $ENV{'HYDRA_DEBUG'};
 }
 
 =item _pluginConfig($main_config, $project_name, $jobset_name, $input_name)
@@ -122,7 +122,7 @@ sub _pluginConfig {
 sub fetchInput {
     my ($self, $type, $name, $value, $project, $jobset) = @_;
 
-    return undef if $type ne "gitinfo";
+    return undef if $type ne "gittree";
 
     my ($uri, $branch, $deepClone, $options) = _parseValue($value);
     # my $cfg = { timeout => 600 };
@@ -139,15 +139,15 @@ sub fetchInput {
         _printIfDebug "'$name': override '$opt_name' with input value: $opt_value\n";
     }
 
-    return getGitInfo($uri, $branch, $cfg->{timeout});
+    return getGitTree($uri, $branch, $cfg->{timeout});
 }
 
 
-sub getGitInfo {
+sub getGitTree {
     my ($uri, $branch, $timeout) = @_;
 
     # Clone or update a branch of the repository into our SCM cache.
-    my $cacheDir = getSCMCacheDir . "/gitinfo";  # avoid colliding with GitInput
+    my $cacheDir = getSCMCacheDir . "/gittree";  # avoid colliding with GitInput
     mkpath($cacheDir);
     my $clonePath = $cacheDir . "/" . sha256_hex($uri);
 
@@ -200,7 +200,7 @@ sub getGitInfo {
             my ($revref, $modname) = split " ", $line;
             my $revision = substr($revref, 1);
             my $suburi = $gitmodules->val("submodule \"$modname\"", 'url');
-            my $subinfo = getGitInfo($suburi, $revision, $timeout);
+            my $subinfo = getGitTree($suburi, $revision, $timeout);
             $subinfo->{submodule} = $modname;
             push @$submodules, $subinfo;
         }
