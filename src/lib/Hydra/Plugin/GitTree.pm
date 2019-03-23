@@ -158,6 +158,12 @@ sub getGitTree {
     if (! -d $clonePath) {
         # Clone at the branch.
         $res = run(cmd => ["git", "clone", $uri, $clonePath]);
+        if ($res->{status} &&
+            index($res->{stderr}, "git@") != -1 &&
+            index($res->{stderr}, "Permission denied (publickey)") != -1) {
+            $uri =~ s,^git\@([^:]+):,https://$1/,;
+            $res = run(cmd => ["git", "clone", $uri, $clonePath]);
+        }
         die "error $res->{status} creating git repo in `$clonePath' from $uri:\n$res->{stderr}\n" if $res->{status};
     } else {
         $res = run(cmd => ["git", "fetch", "-p", "-P", "--recurse-submodules=no", "origin"], dir => $clonePath);
