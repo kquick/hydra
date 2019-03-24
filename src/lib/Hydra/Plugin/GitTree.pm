@@ -144,10 +144,11 @@ sub fetchInput {
     my $gtree = getGitTree($uri, $branch, $cfg->{timeout});
 
     my $storePath = addTreeToStore($gtree);
+    # my $rev = $gtree->{revision};
+    my $timestamp = time;
+    my $rev = strftime("%Y%m%d%H%M%S", gmtime($timestamp));
 
-    return { storePath => $storePath
-           , revision => $gtree->{revision}
-           };
+    return { storePath => $storePath, revision => $rev };
 }
 
 
@@ -241,7 +242,7 @@ sub addTreeToStore {
     my $tree = @_;
 
     my $tempdir = File::Temp->newdir("gittree" . "XXXXX", TMPDIR => 1);
-    my $outPath = $tempdir . "/" . sha256_hex($tree->{uri}) . "-tree";
+    my $outPath = $tempdir . "/" . "tree"; # sha256_hex($tree->{uri}) . "-tree";
 
     open(my $outf, ">", $outPath) or die;
     print $outf encode_json $tree;
