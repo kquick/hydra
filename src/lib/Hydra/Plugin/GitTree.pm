@@ -4,6 +4,8 @@ use strict;
 use parent 'Hydra::Plugin';
 use Digest::SHA qw(sha256_hex);
 use File::Path;
+use File::Temp;
+use JSON;
 use Hydra::Helper::Nix;
 use Nix::Store;
 use Encode;
@@ -139,7 +141,13 @@ sub fetchInput {
         _printIfDebug "'$name': override '$opt_name' with input value: $opt_value\n";
     }
 
-    return getGitTree($uri, $branch, $cfg->{timeout});
+    my $gtree = getGitTree($uri, $branch, $cfg->{timeout});
+
+    my $storePath = addTreeToStore($gtree);
+
+    return { storePath => $storePath
+           , revision => $gtree->{revision}
+           };
 }
 
 
@@ -173,24 +181,24 @@ sub getGitTree {
     die "error $res->{status} checking out $branch in $clonePath:\n$res->{stderr}\n" if $res->{status};
 
     my $timestamp = time;
-    my $sha256;
-    my $storePath;
+    # my $sha256;
+    # my $storePath;
 
     my $revision = _isHash($branch) ? $branch
                    : grab(cmd => ["git", "rev-parse", $branch], dir => $clonePath, chomp => 1);
     die "did not get a well-formated revision number of Git branch '$branch' at `$uri'\n"
         unless $revision =~ /^[0-9a-fA-F]+$/;
 
-    # n.b. this is the nix-prefetch-git packaged with hydra, not the
-    # one in the nix-prefetch-scripts package.  The output formats
-    # differ.
-    $ENV{"NIX_HASH_ALGO"} = "sha256";
-    $ENV{"PRINT_PATH"} = "1";
-    $ENV{"NIX_PREFETCH_GIT_LEAVE_DOT_GIT"} = "0";
-    $ENV{"NIX_PREFETCH_GIT_DEEP_CLONE"} = "";
+    # # n.b. this is the nix-prefetch-git packaged with hydra, not the
+    # # one in the nix-prefetch-scripts package.  The output formats
+    # # differ.
+    # $ENV{"NIX_HASH_ALGO"} = "sha256";
+    # $ENV{"PRINT_PATH"} = "1";
+    # $ENV{"NIX_PREFETCH_GIT_LEAVE_DOT_GIT"} = "0";
+    # $ENV{"NIX_PREFETCH_GIT_DEEP_CLONE"} = "";
 
-    ($sha256, $storePath) = split ' ', grab(cmd => ["nix-prefetch-git", $clonePath, $revision], chomp => 1);
-    addTempRoot($storePath);
+    # ($sha256, $storePath) = split ' ', grab(cmd => ["nix-prefetch-git", $clonePath, $revision], chomp => 1);
+    # addTempRoot($storePath);
 
     # For convenience in producing readable version names, pass the
     # number of commits in the history of this revision (‘revCount’)
@@ -218,12 +226,32 @@ sub getGitTree {
     }
 
     return { uri => $uri
-           , storePath => $storePath
-           , sha256hash => $sha256
+           # , storePath => $storePath
+           # , sha256hash => $sha256
            , revision => $revision
            , revCount => int($revCount)
            , gitTag => $gitTag
-                 , shortRev => $shortRev
-                 , submods => $submodules
+           , shortRev => $shortRev
+           , submods => $submodules
         };
+}
+
+
+sub addTreeToStore {
+    my $tree = @_;
+
+    my $tempdir = File::Temp->newdir("gittree" . "XXXXX", TMPDIR => 1);
+    my $outPath = $tempdir . "/" . sha256_hex($tree->{uri}) . "-tree";
+
+    open(my $outf, ">", $outPath) or die;
+    print $outf encode_json $tree;
+    close $outf;
+
+    # Ensure stability in JSON output
+    system("jq -S . < $outPath > $outPath-sorted");
+
+    my $finalPath = run(cmd => ["nix-store", "--add", "$outPath-sorted"], chomp => 1);
+    die "error $finalPath->{status} storing $outPath in store:\n$finalPath->{stderr}\n" if $finalPath->{status};
+
+    return $finalPath->{stdout};
 }
