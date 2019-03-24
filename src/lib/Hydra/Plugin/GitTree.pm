@@ -184,8 +184,13 @@ sub getGitTree {
     # n.b. this is the nix-prefetch-git packaged with hydra, not the
     # one in the nix-prefetch-scripts package.  The output formats
     # differ.
-    $sha256 = grab(cmd => ["nix-prefetch-git", $clonePath, $revision], chomp => 1);
-    ## addTempRoot($storePath);
+    $ENV{"NIX_HASH_ALGO"} = "sha256";
+    $ENV{"PRINT_PATH"} = "1";
+    $ENV{"NIX_PREFETCH_GIT_LEAVE_DOT_GIT"} = "0";
+    $ENV{"NIX_PREFETCH_GIT_DEEP_CLONE"} = "";
+
+    ($sha256, $storePath) = split ' ', grab(cmd => ["nix-prefetch-git", $clonePath, $revision], chomp => 1);
+    addTempRoot($storePath);
 
     # For convenience in producing readable version names, pass the
     # number of commits in the history of this revision (‘revCount’)
@@ -199,7 +204,7 @@ sub getGitTree {
 
     if (-f "$clonePath/.gitmodules") {
         my $gitmodules = Config::IniFiles->new( -file => "$clonePath/.gitmodules" );
-    
+
         my $submods = grab(cmd => ["git", "submodule", "status"], dir => $clonePath, chomp => 1);
 
         foreach my $line (split /\n/, $submods) {
@@ -211,9 +216,9 @@ sub getGitTree {
             push @$submodules, $subinfo;
         }
     }
-    
+
     return { uri => $uri
-           # , storePath => $storePath
+           , storePath => $storePath
            , sha256hash => $sha256
            , revision => $revision
            , revCount => int($revCount)
