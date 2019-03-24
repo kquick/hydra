@@ -143,10 +143,10 @@ sub fetchInput {
 
     my $gtree = getGitTree($uri, $branch, $cfg->{timeout});
 
-    my $storePath = addTreeToStore($gtree);
-    # my $rev = $gtree->{revision};
-    my $timestamp = time;
-    my $rev = strftime("%Y%m%d%H%M%S", gmtime($timestamp));
+    my $storePath = addTreeToStore($uri, $gtree);
+    my $rev = $gtree->{revision};
+    # my $timestamp = time;
+    # my $rev = strftime("%Y%m%d%H%M%S", gmtime($timestamp));
 
     return { storePath => $storePath, revision => $rev };
 }
@@ -190,17 +190,6 @@ sub getGitTree {
     die "did not get a well-formated revision number of Git branch '$branch' at `$uri'\n"
         unless $revision =~ /^[0-9a-fA-F]+$/;
 
-    # # n.b. this is the nix-prefetch-git packaged with hydra, not the
-    # # one in the nix-prefetch-scripts package.  The output formats
-    # # differ.
-    # $ENV{"NIX_HASH_ALGO"} = "sha256";
-    # $ENV{"PRINT_PATH"} = "1";
-    # $ENV{"NIX_PREFETCH_GIT_LEAVE_DOT_GIT"} = "0";
-    # $ENV{"NIX_PREFETCH_GIT_DEEP_CLONE"} = "";
-
-    # ($sha256, $storePath) = split ' ', grab(cmd => ["nix-prefetch-git", $clonePath, $revision], chomp => 1);
-    # addTempRoot($storePath);
-
     # For convenience in producing readable version names, pass the
     # number of commits in the history of this revision (‘revCount’)
     # the output of git-describe (‘gitTag’), and the abbreviated
@@ -239,7 +228,7 @@ sub getGitTree {
 
 
 sub addTreeToStore {
-    my $tree = @_;
+    my ($uri, $tree) = @_;
 
     my $tempdir = File::Temp->newdir("gittree" . "XXXXX", TMPDIR => 1);
     my $outPath = $tempdir . "/" . "tree"; # sha256_hex($tree->{uri}) . "-tree";
