@@ -11,6 +11,7 @@ use Nix::Store;
 use Encode;
 use Sys::Hostname::Long;
 use IPC::Run;
+use Carp qw/confess/;
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(
@@ -430,7 +431,7 @@ sub grab {
         if (defined $args{dir}) {
             $msgloc = "in $args{dir}";
         }
-        die "command `@{$args{cmd}}' failed with exit status $res->{status} $msgloc";
+        confess "command `@{$args{cmd}}' failed with exit status $res->{status} $msgloc";
     }
     return $res->{stdout};
 }
