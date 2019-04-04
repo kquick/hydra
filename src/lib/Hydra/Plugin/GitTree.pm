@@ -201,17 +201,30 @@ sub getGitTree {
     my $submodules = [];
 
     if (-f "$clonePath/.gitmodules") {
-        my $gitmodules = Config::IniFiles->new( -file => "$clonePath/.gitmodules" );
+        my %gitmodules;
+        tie %gitmodules, 'Config::IniFiles', ( -file => "$clonePath/.gitmodules" );
+        # The gitmodules file has a number of entries in config-ini style:
+        #   [submodule "NAME"]
+        #     path = LOCAL-PATH-TO-CHECKOUT
+        #     url = URL-TO-FETCH-SUBMODULE
+        # Many specifications use the same value for LOCAL-PATH-TO-CHECKOUT and NAME.
 
         my $submods = grab(cmd => ["git", "submodule", "status"], dir => $clonePath, chomp => 1);
+        # the submodule status command reports a list of "-HASH LOCAL-PATH-TO-CHECKOUT" lines.
 
         foreach my $line (split /\n/, $submods) {
-            my ($revref, $modname) = split " ", $line;
+            my ($revref, $modpath) = split " ", $line;
             my $revision = substr($revref, 1);
-            my $suburi = $gitmodules->val("submodule \"$modname\"", 'url');
-            my $subinfo = getGitTree($suburi, $revision, $timeout);
-            $subinfo->{submodule} = $modname;
-            push @$submodules, $subinfo;
+
+            foreach my $section (keys %gitmodules) {
+                if ($gitmodules{$section}{"path"} eq $modpath) {
+                    my $suburi = $gitmodules{$section}{"url"};
+                    my $subinfo = getGitTree($suburi, $revision, $timeout);
+                    $subinfo->{submodule} = $modpath;
+                    push @$submodules, $subinfo;
+                    last;
+                }
+            }
         }
     }
 
