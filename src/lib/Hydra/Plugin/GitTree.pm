@@ -36,21 +36,18 @@ sub _isHash {
 sub _parseValue {
     my ($value) = @_;
     my @parts = split ' ', $value;
-    (my $uri, my $branch, my $deepClone) = @parts;
-    $branch = defined $branch ? $branch : "master";
+    (my $uri, my $branch) = @parts[0..1];
+    my $partstart = (defined $branch && index($branch, '=') == -1) ? 2 : 1;
+    $branch = (defined $branch && (index($branch, '=') == -1)) ? $branch : "master";
+    my $gitref_overrides = {};
     my $options = {};
-    my $start_options = 3;
-    # if deepClone has "=" then is considered an option
-    # and not the enabling of deepClone
-    if (index($deepClone, "=") != -1) {
-        undef $deepClone;
-        $start_options = 2;
+    if (@parts > $partstart) {
+        foreach my $part (@parts[$partstart..$#parts]) {
+            (my $ref, my $ovrrd) = split('=', $part);
+            $gitref_overrides->{$ref} = $ovrrd;
+        }
     }
-    foreach my $option (@parts[$start_options .. $#parts]) {
-        (my $key, my $value) = split('=', $option);
-        $options->{$key} = $value;
-    }
-    return ($uri, $branch, $deepClone, $options);
+    return ($uri, $branch, $gitref_overrides, $options);
 }
 
 sub _printIfDebug {
@@ -126,8 +123,7 @@ sub fetchInput {
 
     return undef if $type ne "gittree";
 
-    my ($uri, $branch, $deepClone, $options) = _parseValue($value);
-    # my $cfg = { timeout => 600 };
+    my ($uri, $branch, $gitref_overrides, $options) = _parseValue($value);
     my $cfg = _pluginConfig($self->{config},
                             $project->get_column('name'),
                             $jobset->get_column('name'),
@@ -141,7 +137,7 @@ sub fetchInput {
         _printIfDebug "'$name': override '$opt_name' with input value: $opt_value\n";
     }
 
-    my $gtree = getGitTree($uri, $branch, $cfg->{timeout});
+    my $gtree = getGitTree($uri, $branch, $gitref_overrides, $cfg->{timeout});
 
     my $storePath = addTreeToStore($uri, $gtree);
     my $rev = $gtree->{revision};
@@ -153,7 +149,7 @@ sub fetchInput {
 
 
 sub getGitTree {
-    my ($uri, $branch, $timeout) = @_;
+    my ($uri, $branch, $gitref_overrides, $timeout) = @_;
 
     # Clone or update a branch of the repository into our SCM cache.
     my $cacheDir = getSCMCacheDir . "/gittree";  # avoid colliding with GitInput
@@ -166,14 +162,15 @@ sub getGitTree {
     my $res;
     if (! -d $clonePath) {
         # Clone at the branch.
-        $res = run(cmd => ["git", "clone", $uri, $clonePath]);
+        my $useURI = defined $gitref_overrides->{$uri} ? $gitref_overrides->{$uri} : $uri;
+        $res = run(cmd => ["git", "clone", $useURI, $clonePath]);
         if ($res->{status} &&
             index($res->{stderr}, "git@") != -1 &&
             index($res->{stderr}, "Permission denied (publickey)") != -1) {
             $uri =~ s,^git\@([^:]+):,https://$1/,;
             $res = run(cmd => ["git", "clone", $uri, $clonePath]);
         }
-        die "error $res->{status} creating git repo in `$clonePath' from $uri:\n$res->{stderr}\n" if $res->{status};
+        die "error $res->{status} creating git repo in `$clonePath' from $useURI:\n$res->{stderr}\n" if $res->{status};
     } else {
         $res = run(cmd => ["git", "fetch", "-p", "-P", "--recurse-submodules=no", "origin"], dir => $clonePath);
         die "error $res->{status} updating git repo in `$clonePath' (remote $uri):\n$res->{stderr}\n" if $res->{status};
@@ -219,7 +216,7 @@ sub getGitTree {
             foreach my $section (keys %gitmodules) {
                 if ($gitmodules{$section}{"path"} eq $modpath) {
                     my $suburi = $gitmodules{$section}{"url"};
-                    my $subinfo = getGitTree($suburi, $revision, $timeout);
+                    my $subinfo = getGitTree($suburi, $revision, $gitref_overrides, $timeout);
                     $subinfo->{submodule} = $modpath;
                     push @$submodules, $subinfo;
                     last;
