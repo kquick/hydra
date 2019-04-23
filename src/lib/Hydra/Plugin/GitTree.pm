@@ -172,7 +172,9 @@ sub getGitTree {
         }
         die "error $res->{status} creating git repo in `$clonePath' from $useURI:\n$res->{stderr}\n" if $res->{status};
     } else {
-        $res = run(cmd => ["git", "pull", "--recurse-submodules=no", "origin"], dir => $clonePath);
+        $res = run(cmd => ["git", "checkout", "-f", "master"], dir => $clonePath);
+        die "error $res->{status} checking out master in git repo in `$clonePath' (remote $uri):\n$res->{stderr}\n" if $res->{status};
+        $res = run(cmd => ["git", "pull", "--recurse-submodules=no", "origin", "master:master"], dir => $clonePath);
         die "error $res->{status} updating git repo in `$clonePath' (remote $uri):\n$res->{stderr}\n" if $res->{status};
     }
     $res = run(cmd => ["git", "checkout", $branch], dir => $clonePath, chomp => 1);
