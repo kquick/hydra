@@ -244,13 +244,12 @@ sub addTreeToStore {
     my $outPath = $tempdir . "/" . "tree"; # sha256_hex($tree->{uri}) . "-tree";
 
     open(my $outf, ">", $outPath) or die;
-    print $outf encode_json $tree;
+    # print $outf encode_json $tree;
+    # Use canonical to sort the keys and therefore ensure stability in the output.
+    print $outf (JSON->new->utf8->pretty->canonical->encode($tree));
     close $outf;
 
-    # Ensure stability in JSON output
-    system("jq -S . < $outPath > $outPath-sorted");
-
-    my $finalPath = run(cmd => ["nix-store", "--add", "$outPath-sorted"], chomp => 1);
+    my $finalPath = run(cmd => ["nix-store", "--add", "$outPath"], chomp => 1);
     die "error $finalPath->{status} storing $outPath in store:\n$finalPath->{stderr}\n" if $finalPath->{status};
 
     return $finalPath->{stdout};
