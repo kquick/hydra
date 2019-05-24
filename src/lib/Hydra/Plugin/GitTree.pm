@@ -177,8 +177,14 @@ sub getGitTree {
         $res = run(cmd => ["git", "pull", "--recurse-submodules=no", "origin", "master:master"], dir => $clonePath);
         die "error $res->{status} updating git repo in `$clonePath' (remote $uri):\n$res->{stderr}\n" if $res->{status};
     }
-    $res = run(cmd => ["git", "checkout", $branch], dir => $clonePath, chomp => 1);
-    die "error $res->{status} checking out $branch in $clonePath:\n$res->{stderr}\n" if $res->{status};
+    $res1 = run(cmd => ["git", "checkout", $branch], dir => $clonePath, chomp => 1);
+    if $res1->{status} {
+        $res = run(cmd => ["git", "checkout", "-B", $branch, "--track", "origin/$branch"],
+                   dir => $clonePath, chomp => 1);
+    } else {
+        $res = $res;
+    }
+    die "errors updating local git cache in $clonePath:\n * $res1->{status} checking out reference $branch\n\n$res1->{stderr}\n\n * $res->{status} checking out branch $branch\n\n$res->{stderr}\n" if $res->{status};
 
     my $timestamp = time;
     # my $sha256;
