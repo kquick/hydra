@@ -176,8 +176,11 @@ sub getGitTree {
         die "error $res->{status} checking out master in git repo in `$clonePath' (remote $uri):\n$res->{stderr}\n" if $res->{status};
         $res = run(cmd => ["git", "pull", "--recurse-submodules=no", "origin", "master:master"], dir => $clonePath);
         die "error $res->{status} updating git repo in `$clonePath' (remote $uri):\n$res->{stderr}\n" if $res->{status};
+        # update the branch listings
+        $res = run(cmd => ["git", "remote", "update", "origin", "--prune"], dir => $clonePath);
+        die "error $res->{status} updating git branch listing in `$clonePath' (remote $uri):\n$res->{stderr}\n" if $res->{status};
     }
-    $res1 = run(cmd => ["git", "checkout", $branch], dir => $clonePath, chomp => 1);
+    my $res1 = run(cmd => ["git", "checkout", $branch], dir => $clonePath, chomp => 1);
     if ($res1->{status}) {
         $res = run(cmd => ["git", "checkout", "-B", $branch, "--track", "origin/$branch"],
                    dir => $clonePath, chomp => 1);
