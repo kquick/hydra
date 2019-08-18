@@ -16,6 +16,11 @@ use List::Util qw(max);
 #   - gitlab_project_id => ID of the project in Gitlab, i.e. in the above
 #     case the ID in gitlab of "nixexprs"
 
+sub isEnabled {
+    my ($self) = @_;
+    return defined $self->{config}->{gitlab_authorization};
+}
+
 sub toGitlabState {
     my ($status, $buildStatus) = @_;
     if ($status == 0) {
@@ -50,11 +55,11 @@ sub common {
                 state => $state,
                 target_url => "$baseurl/build/" . $b->id,
                 description => "Hydra build #" . $b->id . " of $jobName",
-                name => "Hydra " . $b->job->name,
+                name => "Hydra " . $b->get_column('job'),
             });
         while (my $eval = $evals->next) {
             my $gitlabstatusInput = $eval->jobsetevalinputs->find({ name => "gitlab_status_repo" });
-            next unless defined $gitlabstatusInput->value;
+            next unless defined $gitlabstatusInput && defined $gitlabstatusInput->value;
             my $i = $eval->jobsetevalinputs->find({ name => $gitlabstatusInput->value, altnr => 0 });
             next unless defined $i;
             my $projectId = $eval->jobsetevalinputs->find({ name => "gitlab_project_id" })->value;

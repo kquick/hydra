@@ -10,6 +10,10 @@ use Hydra::Helper::Nix;
 use Hydra::Helper::CatalystUtils;
 use Hydra::Helper::Email;
 
+sub isEnabled {
+    my ($self) = @_;
+    return $self->{config}->{email_notification} == 1;
+}
 
 my $template = <<EOF;
 Hi,
@@ -128,8 +132,6 @@ eliminate committers from the set of recipients.
 sub buildFinished {
     my ($self, $build, $dependents) = @_;
 
-    return unless $self->{config}->{email_notification} // 0;
-
     die unless $build->finished;
 
     # Figure out to whom to send notification for each build.  For
@@ -235,7 +237,7 @@ sub buildFinished {
             , dependents => [grep { $_->id != $build->id } @builds]
             , baseurl => getBaseUrl($self->{config})
             , showJobName => \&showJobName, showStatus => \&showStatus
-            , showSystem => index($build->job->name, $build->system) == -1
+            , showSystem => index($build->get_column('job'), $build->system) == -1
             , nrCommits => $nrCommits
             , authorList => $authorList
             , failSteps => \@stepnames
@@ -266,9 +268,9 @@ sub buildFinished {
 
         sendEmail(
             $self->{config}, $to, $subject, $body,
-            [ 'X-Hydra-Project'  => $build->project->name,
-            , 'X-Hydra-Jobset'   => $build->jobset->name,
-            , 'X-Hydra-Job'      => $build->job->name,
+            [ 'X-Hydra-Project'  => $build->get_column('project'),
+            , 'X-Hydra-Jobset'   => $build->get_column('jobset'),
+            , 'X-Hydra-Job'      => $build->get_column('job'),
             , 'X-Hydra-System'   => $build->system
             ]);
     }

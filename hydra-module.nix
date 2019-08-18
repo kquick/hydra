@@ -273,6 +273,7 @@ in
               runuser -u ${config.services.postgresql.superUser} -- ${config.services.postgresql.package}/bin/createdb -O hydra hydra
               touch ${baseDir}/.db-created
             fi
+            echo "create extension if not exists pg_trgm" | runuser -u ${config.services.postgresql.superUser} -- ${config.services.postgresql.package}/bin/psql hydra
           ''}
 
           if [ ! -e ${cfg.gcRootsDir} ]; then
@@ -378,6 +379,23 @@ in
           };
       };
 
+    systemd.services.hydra-notify =
+      { wantedBy = [ "multi-user.target" ];
+        requires = [ "hydra-init.service" ];
+        after = [ "hydra-init.service" ];
+        restartTriggers = [ hydraConf ];
+        environment = env // {
+          PGPASSFILE = "${baseDir}/pgpass-queue-runner"; # grrr
+        };
+        serviceConfig =
+          { ExecStart = "@${cfg.package}/bin/hydra-notify hydra-notify";
+            # FIXME: run this under a less privileged user?
+            User = "hydra-queue-runner";
+            Restart = "always";
+            RestartSec = 5;
+          };
+      };
+
     # If there is less than a certain amount of free disk space, stop
     # the queue/evaluator to prevent builds from failing or aborting.
     systemd.services.hydra-check-space =
@@ -415,6 +433,8 @@ in
         hydra-users hydra-queue-runner hydra
         hydra-users hydra-www hydra
         hydra-users root hydra
+        # The postgres user is used to create the pg_trgm extension for the hydra database
+        hydra-users postgres postgres
       '';
 
     services.postgresql.authentication = optionalString haveLocalDB
