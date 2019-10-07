@@ -1,5 +1,5 @@
 { hydraSrc ? builtins.fetchGit ./.
-, nixpkgs ? builtins.fetchGit { url = https://github.com/NixOS/nixpkgs-channels.git; ref = "nixos-19.03-small"; }
+, nixpkgs ? builtins.fetchGit { url = https://github.com/NixOS/nixpkgs-channels.git; ref = "nixos-19.09-small"; }
 , officialRelease ? false
 , shell ? false
 }:
@@ -100,6 +100,7 @@ rec {
             LWP
             LWPProtocolHttps
             NetAmazonS3
+            NetPrometheus
             NetStatsd
             PadWalker
             Readonly
@@ -107,6 +108,7 @@ rec {
             SetScalar
             Starman
             SysHostnameLong
+            TermSizeAny
             TestMore
             TextDiff
             TextTable
