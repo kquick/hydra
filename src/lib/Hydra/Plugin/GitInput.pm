@@ -8,7 +8,9 @@ use Hydra::Helper::Nix;
 use Nix::Store;
 use Encode;
 use Fcntl qw(:flock);
+use File::stat;
 use Env;
+use JSON;
 use Data::Dumper;
 
 my $CONFIG_SECTION = "git-input";
@@ -55,12 +57,23 @@ Read the configuration from the main hydra config file.
 
 The configuration is loaded from the "git-input" block.
 
-Currently only the "timeout" variable is been looked up in the file.
+Current valid configuration settings:
+
+  * timeout :: specifies the timeout period (in seconds) for
+               performing remote git operations
+
+  * cache_period :: specifies the timeout period (in seconds) for
+                    using cached git information.  This is useful if
+                    there are many jobsets that might share the same
+                    git input: the first jobset does the actual git
+                    fetching and subsequent jobsets evaluated in the
+                    cache_period will quickly complete using the
+                    cached information.
 
 The variables defined directly in the input value will override
 the ones on the configuration file, to define the variables
 as an input value use: <name>=<value> without spaces and
-specify at least he repo url and branch.
+specify at least the repo url and branch.
 
 Expected configuration format in the hydra config file:
     <git-input>
@@ -93,7 +106,7 @@ sub _pluginConfig {
     }
     if (defined $cfg->{$input_block} and %{$cfg->{$input_block}}) {
          _printIfDebug "Merging sections from $input_block\n";
-         # merge with precedense to the input block
+         # merge with precedence to the input block
         $cfg = {%{$cfg}, %{$cfg->{$input_block}}};
     }
     if (exists $cfg->{timeout}) {
@@ -103,6 +116,12 @@ sub _pluginConfig {
         _printIfDebug "Using default timeout for $input_block:\n";
     }
     _printIfDebug "$values->{timeout}\n";
+    if (exists $cfg->{cache_period}) {
+        $values->{cache_period} = int($cfg->{cache_period});
+        _printIfDebug "Caching fetched git information for $input_block for $values->{cache_period} seconds\n";
+    } else {
+        _printIfDebug "Caching disabled for fetched git information\n";
+    }
     return $values;
 }
 
@@ -129,6 +148,21 @@ sub fetchInput {
     my $cacheDir = getSCMCacheDir . "/git";
     mkpath($cacheDir);
     my $clonePath = $cacheDir . "/" . sha256_hex($uri);
+    my $cacheFile = $clonePath . ".cache_" . $branch;
+
+    # Use cached information if available and fresh enough
+    if (exists $cfg->{cache_period}) {
+        if (-r $cacheFile) {
+            my $cacheTime = stat($cacheFile)->mtime;
+            my $nowTime = time;
+            if ($nowTime - $cacheTime <= $cfg->{cache_period}) {
+                _printIfDebug "returning cached information\n";
+                local $/ = undef;
+                open my $fh, "<", $cacheFile;
+                return decode_json(<$fh>);
+            }
+        }
+    }
 
     open(my $lock, ">", "$clonePath.lock") or die;
     flock($lock, LOCK_EX) or die;
@@ -237,7 +271,7 @@ sub fetchInput {
     my $gitTag = grab(cmd => ["git", "describe", "--always", "$revision"], dir => $clonePath, chomp => 1);
     my $shortRev = grab(cmd => ["git", "rev-parse", "--short", "$revision"], dir => $clonePath, chomp => 1);
 
-    return
+    my $rdata =
         { uri => $uri
         , storePath => $storePath
         , sha256hash => $sha256
@@ -246,6 +280,34 @@ sub fetchInput {
         , gitTag => $gitTag
         , shortRev => $shortRev
         };
+
+    # If cacheing enabled, cache these results.
+    if (exists $cfg->{cache_period}) {
+        _printIfDebug "Caching git information into $cacheFile\n";
+        open my $ofh, ">", $cacheFile;
+        print $ofh encode_json($rdata);
+        close $ofh;
+        cleanup_cachefiles($cfg->{cache_period}, $clonePath);
+    }
+
+    return $rdata;
+}
+
+sub cleanup_cachefiles {
+    my ($cache_period, $base) = @_;
+    # Find all cache files relative to $base (sha from the input's
+    # URL) and remove any which exceed the cache period.  The file
+    # check in fetchInput will prevent using an old cache file, but
+    # this ensures that cache files for refs (e.g. branches) that no
+    # longer exist are removed.
+    $files = glob($base . ".cache_*");
+    $now_time = time;
+    foreach ($files as $cache_file) {
+        my $cache_time = stat($cache_file)->mtime;
+        if ($now_time - $cache_time > $cache_period) {
+            unlink $cache_file;
+        }
+    }
 }
 
 sub getCommits {
