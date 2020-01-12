@@ -155,12 +155,12 @@ sub fetchInput {
         if (-r $cacheFile) {
             my $cacheTime = stat($cacheFile)->mtime;
             my $nowTime = time;
-            if ($nowTime - $cacheTime <= $cfg->{cache_period}) {
-                _printIfDebug "returning cached information\n";
+            if ($nowTime - $cacheTime <= $cfg->{cache_period}) {{
+                _printIfDebug "returning cached information for $name ref $branch\n";
                 local $/ = undef;
-                open my $fh, "<", $cacheFile;
+                open my $fh, "<", $cacheFile or last;
                 return decode_json(<$fh>);
-            }
+            }}
         }
     }
 
@@ -282,13 +282,13 @@ sub fetchInput {
         };
 
     # If cacheing enabled, cache these results.
-    if (exists $cfg->{cache_period}) {
-        _printIfDebug "Caching git information into $cacheFile\n";
-        open my $ofh, ">", $cacheFile;
+    if (exists $cfg->{cache_period}) {{
+        _printIfDebug "Caching git information for $name ref $branch into $cacheFile\n";
+        open my $ofh, ">", $cacheFile or last;
         print $ofh encode_json($rdata);
         close $ofh;
         cleanup_cachefiles($cfg->{cache_period}, $clonePath);
-    }
+    }}
 
     return $rdata;
 }
@@ -300,12 +300,12 @@ sub cleanup_cachefiles {
     # check in fetchInput will prevent using an old cache file, but
     # this ensures that cache files for refs (e.g. branches) that no
     # longer exist are removed.
-    $files = glob($base . ".cache_*");
-    $now_time = time;
-    foreach ($files as $cache_file) {
+    my $files = glob($base . ".cache_*");
+    my $now_time = time;
+    foreach my $cache_file ($files) {
         my $cache_time = stat($cache_file)->mtime;
         if ($now_time - $cache_time > $cache_period) {
-            unlink $cache_file;
+            unlink $cache_file or next;  # failure on one file doesn't abort cleanup
         }
     }
 }
