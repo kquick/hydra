@@ -303,6 +303,7 @@ sub cleanup_cachefiles {
     my $files = glob($base . ".cache_*");
     my $now_time = time;
     foreach my $cache_file ($files) {
+        if (!defined($cache_file)) { next; } # happens occasionally... why?
         my $cache_time = stat($cache_file)->mtime;
         if ($now_time - $cache_time > $cache_period) {
             unlink $cache_file or next;  # failure on one file doesn't abort cleanup
