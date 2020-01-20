@@ -156,10 +156,15 @@ sub fetchInput {
             my $cacheTime = stat($cacheFile)->mtime;
             my $nowTime = time;
             if ($nowTime - $cacheTime <= $cfg->{cache_period}) {{
-                _printIfDebug "returning cached information for $name ref $branch\n";
                 local $/ = undef;
                 open my $fh, "<", $cacheFile or last;
-                return decode_json(<$fh>);
+                my $data = decode_json(<$fh>);
+                if (-e $data->{storePath}) {
+                    _printIfDebug "returning cached information for $name ref $branch\n";
+                } else {
+                    _printIfDebug "rebuilding Git info for $name ref $branch; store path was GC'd\n";
+                    last;
+                }
             }}
         }
     }
