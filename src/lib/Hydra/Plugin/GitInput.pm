@@ -161,6 +161,7 @@ sub fetchInput {
                 my $data = decode_json(<$fh>);
                 if (-e $data->{storePath}) {
                     _printIfDebug "returning cached information for $name ref $branch\n";
+                    return $data;
                 } else {
                     _printIfDebug "rebuilding Git info for $name ref $branch; store path was GC'd\n";
                     last;
