@@ -230,8 +230,17 @@ State::StepResult State::doBuildStep(nix::ref<Store> destStore,
     time_t stepStopTime = time(0);
     if (!result.stopTime) result.stopTime = stepStopTime;
 
-    /* For standard failures, we don't care about the error
-       message. */
+    /* Log output information for diagnostics purposes */
+    if (result.stepStatus != bsSuccess) {
+        const std::string failtype(result.canRetry ? " (possibly transient)" : "");
+        printMsg(lvlError, format("Build %6%%4% %7% (attempt #%5%) building ‘%1%’ on ‘%2%’: %3%  [Log tail: %8%]")
+                 % step->drvPath % machine->sshName % result.errorMsg
+                 % failtype % result.timesBuilt % buildId
+                 % buildStatusStr(result.stepStatus) % result.errorLog);
+    }
+
+    /* For standard failures, we don't care about storing the error
+       message in the database. */
     if (result.stepStatus != bsAborted)
         result.errorMsg = "";
 
